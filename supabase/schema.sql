@@ -27,11 +27,22 @@ create table if not exists public.attendance (
  foreign key(training_id,user_id) references public.trainings(id,user_id) on delete cascade
 );
 -- Ensure attendance cannot reference another user's player, including for inserts.
-alter table public.players add constraint players_id_user_unique unique(id,user_id);
-alter table public.attendance add constraint attendance_player_owner_fk foreign key(player_id,user_id) references public.players(id,user_id) on delete cascade;
+do $ begin
+  if not exists (select 1 from pg_constraint where conname = 'players_id_user_unique' and conrelid = 'public.players'::regclass) then
+    alter table public.players add constraint players_id_user_unique unique(id,user_id);
+  end if;
+end $;
+do $ begin
+  if not exists (select 1 from pg_constraint where conname = 'attendance_player_owner_fk' and conrelid = 'public.attendance'::regclass) then
+    alter table public.attendance add constraint attendance_player_owner_fk foreign key(player_id,user_id) references public.players(id,user_id) on delete cascade;
+  end if;
+end $;
 alter table public.players enable row level security;
 alter table public.trainings enable row level security;
 alter table public.attendance enable row level security;
+drop policy if exists "own players" on public.players;
 create policy "own players" on public.players for all to authenticated using (user_id=(select auth.uid())) with check (user_id=(select auth.uid()));
+drop policy if exists "own trainings" on public.trainings;
 create policy "own trainings" on public.trainings for all to authenticated using (user_id=(select auth.uid())) with check (user_id=(select auth.uid()));
+drop policy if exists "own attendance" on public.attendance;
 create policy "own attendance" on public.attendance for all to authenticated using (user_id=(select auth.uid())) with check (user_id=(select auth.uid()));
